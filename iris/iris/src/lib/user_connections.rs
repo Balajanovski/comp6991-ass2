@@ -1,19 +1,19 @@
 use crate::connect::ConnectionWrite;
-use crate::types::{Nick, ErrorType};
-use concurrent_hashmap::ConcHashMap;
+use crate::types::{Nick, ErrorType, Reply};
+use dashmap::DashMap;
 
 pub struct UserConnections {
     /// A bit of design excellence
     /// Utilising a concurrent hashmap to reduce lock contention
-    writers: ConcHashMap<String, ConnectionWrite>,
+    writers: DashMap<String, ConnectionWrite>,
 }
 
 impl UserConnections {
     pub fn new() -> UserConnections {
-        UserConnections { writers: ConcHashMap::<String, ConnectionWrite>::new() }
+        UserConnections { writers: DashMap::new() }
     }
 
-    pub fn add_user(&mut self, nick: &Nick, conn_write: ConnectionWrite) -> Result<(), ErrorType> {
+    pub fn add_user(&self, nick: &Nick, conn_write: ConnectionWrite) -> Result<(), ErrorType> {
         let nick = nick.to_string();
         if let Some(_) = self.writers.insert(nick, conn_write) {
             Err(ErrorType::NickCollision)
@@ -22,14 +22,14 @@ impl UserConnections {
         }
     }
 
-    pub fn remove_user(&mut self, nick: &Nick) {
+    pub fn remove_user(&self, nick: &Nick) {
         self.writers.remove(&nick.to_string());
     }
 
-    pub fn write_to_user(&self, target: &Nick, message: &str) -> Result<(), ErrorType> {
-        match self.writers.find_mut(&target.to_string()) {
+    pub fn write_to_user(&self, target: &Nick, message: &Reply) -> Result<(), ErrorType> {
+        match self.writers.get_mut(&target.to_string()) {
             Some(mut writer) => {
-                writer.get().write_message(message);
+                writer.write_message(message.to_string().as_str());
                 Ok(())
             }
             None => Err(ErrorType::NoSuchNick),

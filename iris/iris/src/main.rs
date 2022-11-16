@@ -1,6 +1,6 @@
 #[macro_use] extern crate log;
 extern crate simplelog;
-extern crate concurrent_hashmap;
+extern crate dashmap;
 
 use clap::Parser;
 use iris_lib::{
@@ -39,7 +39,6 @@ fn main() {
     loop {
         // This function call will block until a new client connects!
         let (mut conn_read, conn_write) = connection_manager.accept_new_connection();
-        let conn_write = Box::new(conn_write);
 
         info!("New connection from {}", conn_read.id());
 
@@ -49,19 +48,24 @@ fn main() {
             info!("Waiting for message...");
 
             let message = conn_read.read_message();
+            let message = message.as_deref().map(ParsedMessage::try_from);
             let message = match message {
-                Ok(message) => message,
+                Ok(Ok(message)) => message,
                 Err(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
-                    error!("Lost connection.");
+                    info!("Lost connection.");
                     break;
                 },
                 Err(_) => {
                     error!("Invalid message received... ignoring message.");
                     continue;
                 },
+                Ok(Err(err)) => {
+                    error!("{err}");
+                    continue;
+                },
             };
 
-            handler = MessageHandler::handle(handler, message.as_str());
+            handler = MessageHandler::handle(handler, &message.message);
         }
     }
 }

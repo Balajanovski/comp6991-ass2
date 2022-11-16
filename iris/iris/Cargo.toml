@@ -16,6 +16,6 @@ path = "src/main.rs"
 [dependencies]
 bufstream = "0.1.4"
 clap = { version = "4.0.18", features = ["derive"] }
-concurrent-hashmap = { version = "0.2.1", default-features = false }
+dashmap = "5.4.0"
 log = "0.4.17"
 simplelog = "0.12.0"
