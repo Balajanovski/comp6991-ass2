@@ -104,7 +104,7 @@ impl std::fmt::Display for Target {
 }
 
 /// A nickname.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Nick(pub String);
 
 impl TryFrom<String> for Nick {
@@ -288,14 +288,18 @@ pub enum Message {
 /// To parse a message, construct this struct.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnparsedMessage<'a> {
-    pub sender_nick: Nick,
     pub message: &'a str,
+}
+
+impl<'a> From<&'a str> for UnparsedMessage<'a> {
+    fn from(value: &'a str) -> Self {
+        UnparsedMessage { message: value }
+    }
 }
 
 /// After parsing an `UnparsedMessage`, this struct will be created.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMessage {
-    pub sender_nick: Nick,
     pub message: Message,
 }
 
@@ -310,7 +314,7 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
         let message = match command[0].as_str() {
             "PING" => Ok(Message::Ping(
                 // Skip here ignores the "PING".
-                command.skip(1).last().ok_or(ErrorType::NoOrigin)?.to_string(),
+                command.into_iter().skip(1).last().ok_or(ErrorType::NoOrigin)?.to_string(),
             )),
             "PRIVMSG" => Ok(Message::PrivMsg(PrivMsg::try_from(command)?)),
             "USER" => Ok(Message::User(UserMsg::try_from(command)?)),
@@ -322,9 +326,15 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
         }?;
 
         Ok(ParsedMessage {
-            sender_nick: value.sender_nick,
             message,
         })
+    }
+}
+
+impl<'a> TryFrom<&'a str> for ParsedMessage {
+    type Error = ErrorType;
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        ParsedMessage::try_from(UnparsedMessage::from(value))
     }
 }
 

@@ -1,9 +1,17 @@
+#[macro_use] extern crate log;
+extern crate simplelog;
+extern crate concurrent_hashmap;
+
 use clap::Parser;
 use iris_lib::{
     connect::{ConnectionError, ConnectionManager},
-    types::SERVER_NAME,
+    types::{SERVER_NAME, ParsedMessage, Message, Reply},
+    message_handler::{FreshHandler, MessageHandler},
+    user_connections::UserConnections,
 };
 use std::net::IpAddr;
+use std::sync::Arc;
+use simplelog::*;
 
 #[derive(Parser)]
 struct Arguments {
@@ -16,7 +24,9 @@ struct Arguments {
 
 fn main() {
     let arguments = Arguments::parse();
-    println!(
+    let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
+
+    info!(
         "Launching {} at {}:{}",
         SERVER_NAME,
         arguments.ip_address,
@@ -24,30 +34,34 @@ fn main() {
     );
 
     let mut connection_manager = ConnectionManager::launch(arguments.ip_address, arguments.port);
+    let mut user_connections = Arc::new(UserConnections::new());
+
     loop {
         // This function call will block until a new client connects!
-        let (mut conn_read, mut conn_write) = connection_manager.accept_new_connection();
+        let (mut conn_read, conn_write) = connection_manager.accept_new_connection();
+        let conn_write = Box::new(conn_write);
 
-        println!("New connection from {}", conn_read.id());
+        info!("New connection from {}", conn_read.id());
+
+        let mut handler: Box<dyn MessageHandler> = FreshHandler::new(user_connections.clone(), conn_write);
 
         loop {
-            println!("Waiting for message...");
-            let message = match conn_read.read_message() {
+            info!("Waiting for message...");
+
+            let message = conn_read.read_message();
+            let message = match message {
                 Ok(message) => message,
                 Err(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
-                    println!("Lost connection.");
+                    error!("Lost connection.");
                     break;
-                }
+                },
                 Err(_) => {
-                    println!("Invalid message received... ignoring message.");
+                    error!("Invalid message received... ignoring message.");
                     continue;
-                }
+                },
             };
 
-            println!("Received message: {message}");
-
-            let _ = conn_write.write_message("Hello, World!\r\n");
-            println!("Sent hello-world message back!");
+            handler = MessageHandler::handle(handler, message.as_str());
         }
     }
 }
