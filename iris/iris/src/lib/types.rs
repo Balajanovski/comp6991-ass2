@@ -131,7 +131,7 @@ impl std::fmt::Display for Nick {
 }
 
 /// An IRC channel.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Channel(pub String);
 
 impl TryFrom<String> for Channel {

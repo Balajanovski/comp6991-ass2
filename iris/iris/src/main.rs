@@ -1,6 +1,5 @@
 #[macro_use] extern crate log;
 extern crate simplelog;
-extern crate dashmap;
 
 use clap::Parser;
 use iris_lib::{
@@ -10,7 +9,7 @@ use iris_lib::{
     user_connections::UserConnections,
 };
 use std::net::IpAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use simplelog::*;
 
 #[derive(Parser)]
@@ -34,7 +33,7 @@ fn main() {
     );
 
     let mut connection_manager = ConnectionManager::launch(arguments.ip_address, arguments.port);
-    let mut user_connections = Arc::new(UserConnections::new());
+    let user_connections = Arc::new(Mutex::new(UserConnections::new()));
 
     loop {
         // This function call will block until a new client connects!
@@ -43,12 +42,13 @@ fn main() {
         info!("New connection from {}", conn_read.id());
 
         let mut handler: Box<dyn MessageHandler> = FreshHandler::new(user_connections.clone(), conn_write);
-
-        loop {
+        while !MessageHandler::has_quit(handler.as_ref()) {
             info!("Waiting for message...");
 
             let message = conn_read.read_message();
             let message = message.as_deref().map(ParsedMessage::try_from);
+
+            /// TODO: Deal with deleting from UserConnections on an error here happening
             let message = match message {
                 Ok(Ok(message)) => message,
                 Err(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
@@ -67,5 +67,7 @@ fn main() {
 
             handler = MessageHandler::handle(handler, &message.message);
         }
+
+        info!("Connection has closed...");
     }
 }
