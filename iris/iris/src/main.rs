@@ -54,7 +54,7 @@ fn main() {
 
             s.spawn(move || {
                 let mut handler = MessageHandler::new(
-                    thread_user_connections, 
+                    &thread_user_connections, 
                     conn_write, 
                     thread_plugin_list
                 );

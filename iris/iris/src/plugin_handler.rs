@@ -1,18 +1,22 @@
 use std::collections::{BTreeMap};
 
-use common::plugin::{PluginMod_Ref, RPluginReply};
-use common::types::{PluginName, PluginMsg, PluginReply, ErrorType, Nick};
+use common::plugin::{PluginMod_Ref};
+use common::types::{PluginName, PluginMsg, ErrorType, Nick, PluginReply, Reply};
 use std::path::Path;
 use log::{error, warn};
-use anyhow::anyhow;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use crate::user_connections::UserConnections;
+use closure::closure;
 
 
 pub struct PluginHandler {
-    plugins: BTreeMap<PluginName, PluginMod_Ref>,
+    plugins: Arc<Mutex<BTreeMap<PluginName, PluginMod_Ref>>>,
+    user_connections: Arc<Mutex<UserConnections>>
 }
 
 impl PluginHandler {
-    pub fn new(plugin_paths: &Vec<String>) -> PluginHandler {
+    pub fn new(plugin_paths: &Vec<String>, user_connections: Arc<Mutex<UserConnections>>) -> PluginHandler {
         let plugins = plugin_paths.iter().map(|path| {
             let plugin = abi_stable::library::lib_header_from_path(
                 Path::new(path)
@@ -46,24 +50,45 @@ impl PluginHandler {
             plugin_map.insert(pl_name, pl);
         }
 
-        PluginHandler { plugins: plugin_map }
+        PluginHandler { plugins: Arc::new(Mutex::new(plugin_map)), user_connections }
     }
 
-    pub fn handle(&self, nick: &Nick, real_name: &String, plugin_msg: PluginMsg) -> anyhow::Result<Option<PluginReply>> {
+    pub fn handle(&self, nick: &Nick, real_name: &String, plugin_msg: PluginMsg) {
         let pl_name = plugin_msg.plugin_name.clone();
-        let plugin = self.plugins.get(&pl_name)
-            .ok_or(ErrorType::NoSuchPlugin)
-            .map_err(|e| anyhow!(e))?;
-        
-        let pl_repl = Result::from(plugin.handler()(nick.clone().into(), real_name.clone().into(), plugin_msg.into()))
-            .map_err(|e| {
-                error!("Plugin (Name: {}) Exception: {}", &pl_name, String::from(e));
-                anyhow!(ErrorType::PluginException)
-            });
+        let plugins = self.plugins.clone();
+        let nick = nick.clone();
+        let real_name = real_name.clone();
+        let user_connections = self.user_connections.clone();
 
-        match pl_repl {
-            Ok(pl_repl) => Ok(Option::from(pl_repl).map(|repl: RPluginReply| repl.into())),
-            Err(_) => Ok(None),
-        }
+        // Run a detached thread with the plugin
+        // This is to allow the plugin to implement delays
+        // without slowing the server down
+        thread::spawn(closure!(move pl_name, move plugins, move nick, move real_name, move user_connections, || {
+            let plugins_guard = plugins.lock().unwrap();
+            let plugin = plugins_guard.get(&pl_name)
+                .ok_or(ErrorType::NoSuchPlugin)
+                .map_err(|_| {
+                    error!("Plugin {} not found", &pl_name);
+                });
+
+            if let Ok(plugin) = plugin {
+                let plugin_reply = Result::from(plugin.handler()(nick.clone().into(), real_name.clone().into(), plugin_msg.into()))
+                    .map_err(|e| {
+                        error!("Plugin (Name: {}) Exception: {}", &pl_name, String::from(e));
+                        return;
+                    });
+
+                if let Ok(plugin_reply) = plugin_reply {
+                    let plugin_reply = Option::<PluginReply>::from(plugin_reply.map(|repl| repl.into()));
+
+                    if let Some(plugin_reply) = plugin_reply {
+                        let mut user_conn_guard = user_connections.lock().unwrap();
+
+                        // We ignore any errors when writing, as if a plugin's output gets lost, it is not mission critical
+                        let _ = user_conn_guard.write(&plugin_reply.target.clone(), &Reply::Plugin(plugin_reply));
+                    }
+                }
+            }
+        }));
     }
 }

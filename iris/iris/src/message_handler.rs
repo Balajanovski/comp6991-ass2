@@ -37,7 +37,7 @@ pub struct MessageHandler {
 
 impl MessageHandler {
     pub fn new(
-        user_connections: Arc<Mutex<UserConnections>>,
+        user_connections: &Arc<Mutex<UserConnections>>,
         curr_writer: ConnectionWrite,
         plugin_paths: Vec<String>,
     ) -> MessageHandler {
@@ -45,8 +45,8 @@ impl MessageHandler {
             state: ClientState::Fresh(Fresh {
                 curr_writer: Arc::new(Mutex::new(curr_writer)),
             }),
-            user_connections,
-            plugin_handler: PluginHandler::new(&plugin_paths),
+            user_connections: user_connections.clone(),
+            plugin_handler: PluginHandler::new(&plugin_paths, user_connections.clone()),
         }
     }
 
@@ -191,12 +191,7 @@ impl MessageHandler {
             }
             (ClientState::Initialised(state), Message::Plugin(plugin_msg)) => {
                 let nick = state.nick.clone();
-                let plugin_reply = self.plugin_handler.handle(&nick, &state.real_name, plugin_msg)?;
-
-                if let Some(plugin_reply) = plugin_reply {
-                    let mut user_conn_guard = self.user_connections.lock().unwrap();
-                    user_conn_guard.write(&plugin_reply.target.clone(), &Reply::Plugin(plugin_reply))?;
-                }
+                self.plugin_handler.handle(&nick, &state.real_name, plugin_msg);
             }
             _ => {}
         };

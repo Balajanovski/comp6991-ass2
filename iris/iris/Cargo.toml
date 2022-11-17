@@ -17,3 +17,4 @@ log = "0.4.17"
 simplelog = "0.12.0"
 common = {path = "../common"}
 abi_stable = "0.10.0"
+closure = "0.3.0"
