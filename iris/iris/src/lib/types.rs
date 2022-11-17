@@ -250,7 +250,11 @@ impl TryFrom<Vec<String>> for PrivMsg {
         Ok(PrivMsg {
             target: Target::from(value.get(1).ok_or(ErrorType::NoRecipient)?.to_string()),
             // skip(2) here skips the PRIVMSG instruction and target.
-            message: value.into_iter().skip(2).last().ok_or(ErrorType::NoTextToSend)?,
+            message: value
+                .into_iter()
+                .skip(2)
+                .last()
+                .ok_or(ErrorType::NoTextToSend)?,
         })
     }
 }
@@ -314,7 +318,12 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
         let message = match command[0].as_str() {
             "PING" => Ok(Message::Ping(
                 // Skip here ignores the "PING".
-                command.into_iter().skip(1).last().ok_or(ErrorType::NoOrigin)?.to_string(),
+                command
+                    .into_iter()
+                    .skip(1)
+                    .last()
+                    .ok_or(ErrorType::NoOrigin)?
+                    .to_string(),
             )),
             "PRIVMSG" => Ok(Message::PrivMsg(PrivMsg::try_from(command)?)),
             "USER" => Ok(Message::User(UserMsg::try_from(command)?)),
@@ -325,9 +334,7 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
             _ => Err(ErrorType::UnknownCommand),
         }?;
 
-        Ok(ParsedMessage {
-            message,
-        })
+        Ok(ParsedMessage { message })
     }
 }
 

@@ -1,6 +1,8 @@
 use std::{
+    error::Error,
+    fmt::{Debug, Display},
     io::{Read, Write},
-    net::{IpAddr, SocketAddr, TcpListener, TcpStream}, error::Error, fmt::{Display, Debug},
+    net::{IpAddr, SocketAddr, TcpListener, TcpStream},
 };
 
 pub struct ConnectionManager {
@@ -28,12 +30,12 @@ impl ConnectionManager {
                                 continue;
                             }
                         },
-                        socket
+                        socket,
                     );
 
                     return (
                         ConnectionRead::from_socket(socket_read, addr),
-                        ConnectionWrite::from_socket(socket_write, addr)
+                        ConnectionWrite::from_socket(socket_write, addr),
                     );
                 }
                 Err(err) => {
@@ -107,16 +109,15 @@ impl ConnectionRead {
                     }
                 };
             };
-    
+
             self.buflen += n_bytes;
         }
 
-        let end = self.buffer_crlf()
-            .ok_or_else(|| {
-                // Clear out their data...
-                self.buflen = 0;
-                ConnectionError::MessageTooLong
-            })?;
+        let end = self.buffer_crlf().ok_or_else(|| {
+            // Clear out their data...
+            self.buflen = 0;
+            ConnectionError::MessageTooLong
+        })?;
 
         let bytes = Vec::from(&self.buffer[0..end]);
 
