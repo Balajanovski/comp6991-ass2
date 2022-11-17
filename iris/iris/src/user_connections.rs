@@ -1,7 +1,7 @@
-use crate::connect::ConnectionWrite;
-use crate::types::{Channel, ErrorType, Nick, Reply, Target};
-use std::collections::{BTreeMap, BTreeSet};
+use common::connect::ConnectionWrite;
+use common::types::{Channel, ErrorType, Nick, Reply, Target};
 use anyhow::anyhow;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 pub struct UserConnections {
@@ -19,12 +19,17 @@ impl UserConnections {
         }
     }
 
-    pub fn add_user(&mut self, nick: &Nick, conn_write: Arc<Mutex<ConnectionWrite>>) -> anyhow::Result<()> {
+    pub fn add_user(
+        &mut self,
+        nick: &Nick,
+        conn_write: Arc<Mutex<ConnectionWrite>>,
+    ) -> anyhow::Result<()> {
         if let Some(_) = self.writers.insert(nick.clone(), conn_write) {
             Err(ErrorType::NickCollision)
         } else {
             Ok(())
-        }.map_err(|e| anyhow!(e))
+        }
+        .map_err(|e| anyhow!(e))
     }
 
     pub fn remove_user(&mut self, nick: &Nick) {
@@ -57,9 +62,15 @@ impl UserConnections {
         Ok(())
     }
 
-    pub fn remove_user_from_channel(&mut self, nick: &Nick, channel: &Channel) -> anyhow::Result<()> {
+    pub fn remove_user_from_channel(
+        &mut self,
+        nick: &Nick,
+        channel: &Channel,
+    ) -> anyhow::Result<()> {
         if !self.writers.contains_key(nick) {
-            panic!("User {nick} does not already exist before being removed from channel {channel}");
+            panic!(
+                "User {nick} does not already exist before being removed from channel {channel}"
+            );
         }
 
         self.users_per_channel
@@ -74,7 +85,6 @@ impl UserConnections {
         Ok(())
     }
 
-
     pub fn write(&mut self, target: &Target, message: &Reply) -> anyhow::Result<()> {
         match target {
             Target::User(nick) => self.write_to_user(nick, message),
@@ -85,18 +95,23 @@ impl UserConnections {
     pub fn write_to_user(&mut self, target: &Nick, message: &Reply) -> anyhow::Result<()> {
         match self.writers.get_mut(target) {
             Some(writer) => {
-                writer.lock().unwrap().write_message(message.to_string().as_str())?;
+                writer
+                    .lock()
+                    .unwrap()
+                    .write_message(message.to_string().as_str())?;
                 Ok(())
             }
             None => Err(ErrorType::NoSuchNick),
-        }.map_err(|e| anyhow!(e))
+        }
+        .map_err(|e| anyhow!(e))
     }
 
     pub fn write_to_channel(&mut self, target: &Channel, message: &Reply) -> anyhow::Result<()> {
         let nicks = match self.users_per_channel.get(target) {
             Some(nicks) => Ok(nicks.clone()),
             None => Err(ErrorType::NoSuchChannel),
-        }.map_err(|e| anyhow!(e))?;
+        }
+        .map_err(|e| anyhow!(e))?;
 
         for nick in nicks {
             self.write_to_user(&nick, message)?;
@@ -105,17 +120,13 @@ impl UserConnections {
         Ok(())
     }
 
-    pub fn write_to_users_channel(
-        &mut self,
-        target: &Nick,
-        message: &Reply,
-    ) -> anyhow::Result<()> {
+    pub fn write_to_users_channel(&mut self, target: &Nick, message: &Reply) -> anyhow::Result<()> {
         if let Some(channels) = self.channels_per_user.get(&target.clone()) {
             for channel in channels.clone().iter() {
                 self.write_to_channel(&channel, message)?;
             }
         }
-        
+
         Ok(())
     }
 }

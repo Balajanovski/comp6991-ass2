@@ -2,18 +2,20 @@
 extern crate log;
 extern crate simplelog;
 
+mod message_handler;
+mod user_connections;
+
+use anyhow::anyhow;
 use clap::Parser;
-use iris_lib::{
-    connect::{ConnectionManager},
+use crate::{
     message_handler::MessageHandler,
-    types::{SERVER_NAME},
     user_connections::UserConnections,
 };
+use common::{types::SERVER_NAME, connect::ConnectionManager};
 use simplelog::*;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use anyhow::anyhow;
 
 #[derive(Parser)]
 struct Arguments {

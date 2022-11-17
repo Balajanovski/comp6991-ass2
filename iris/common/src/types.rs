@@ -12,6 +12,7 @@ pub enum ErrorType {
     NeedMoreParams = 461,
     NoSuchNick = 401,
     NoSuchChannel = 403,
+    NoSuchPlugin = 999,
 }
 
 /// This is the name of your server, all messages originating from
@@ -51,6 +52,9 @@ impl std::fmt::Display for ErrorType {
             }
             ErrorType::NickCollision => {
                 write!(fmt, ":{SERVER_NAME} 436 :Nickname collision")
+            }
+            ErrorType::NoSuchPlugin => {
+                write!(fmt, ":{SERVER_NAME} 999 :No such plugin")
             }
         }
     }
@@ -156,6 +160,26 @@ impl std::fmt::Display for Channel {
     }
 }
 
+/// An IRC plugin name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct PluginName(pub String);
+
+impl TryFrom<String> for PluginName {
+    type Error = ErrorType;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if (1..20).contains(&value.len())
+            && value.chars().next().unwrap_or('!') == '/'
+            && value.is_ascii()
+            && value[1..].chars().all(char::is_alphanumeric)
+        {
+            Ok(PluginName(value))
+        } else {
+            Err(ErrorType::NoSuchPlugin)
+        }
+    }
+}
+
 /// A message to set the nickname.
 /// For example: `NICK tfpk\r\n`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +259,27 @@ impl TryFrom<Vec<String>> for UserMsg {
     }
 }
 
+/// A plugin message
+/// For example: `PLUGIN /remind 10 :message`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginMsg {
+    pub plugin_name: PluginName,
+    pub short_args: Vec<String>,
+    pub long_arg: String,
+}
+
+impl TryFrom<Vec<String>> for PluginMsg {
+    type Error = ErrorType;
+
+    fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
+        Ok(PluginMsg {
+            plugin_name: PluginName::try_from(value.get(1).ok_or(ErrorType::NoSuchPlugin)?.to_string())?,
+            long_arg: value[value.len()-1].clone(),
+            short_args: (&value[2..value.len()-1]).to_vec(),
+        })
+    }
+}
+
 /// A private message.
 /// For example: `PRIVMSG tom :Hi Tom, how are you?\r\n`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -287,6 +332,7 @@ pub enum Message {
     Join(JoinMsg),
     Part(PartMsg),
     Quit(QuitMsg),
+    Plugin(PluginMsg),
 }
 
 /// To parse a message, construct this struct.
@@ -331,6 +377,7 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
             "JOIN" => Ok(Message::Join(JoinMsg::try_from(command)?)),
             "PART" => Ok(Message::Part(PartMsg::try_from(command)?)),
             "QUIT" => Ok(Message::Quit(QuitMsg::try_from(command)?)),
+            "PLUGIN" => Ok(Message::Plugin(PluginMsg::try_from(command)?)),
             _ => Err(ErrorType::UnknownCommand),
         }?;
 
@@ -375,6 +422,12 @@ pub struct WelcomeReply {
     pub message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginReply {
+    pub target: Target,
+    pub message: String,
+}
+
 /// Every possible reply to a message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reply {
@@ -385,12 +438,18 @@ pub enum Reply {
     Part(PartReply),
     Error(ErrorType),
     Quit(QuitReply),
+    Plugin(PluginReply),
 }
 
 impl std::fmt::Display for Reply {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Reply::Pong(p) => write!(fmt, "PONG :{p}\r\n"),
+            Reply::Plugin(p) => {
+                let target = &p.target;
+                let message = &p.message;
+                write!(fmt, "PLUGIN {target} : {message}\r\n")
+            },
             Reply::Welcome(r) => {
                 let nick = &r.target_nick;
                 let message = &r.message;

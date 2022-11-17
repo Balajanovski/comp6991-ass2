@@ -2,16 +2,13 @@
 //! Implements state design pattern to handle transitions between handler states
 //! Very loosely based off of: https://hoverbear.org/blog/rust-state-machine-pattern/
 
-use crate::connect::{ConnectionError, ConnectionWrite};
-use crate::types::{
-    Message, Nick, ParsedMessage, PrivReply, QuitReply, Reply,
-    WelcomeReply, JoinReply, PartReply,
-};
+use common::connect::{ConnectionError, ConnectionWrite};
+use common::types::*;
 use crate::user_connections::UserConnections;
 use log::{error, info};
 use std::sync::{Arc, Mutex};
 
-pub enum HandlerState {
+pub enum ClientState {
     Fresh(Fresh),
     Nicked(Nicked),
     Initialised(Initialised),
@@ -32,7 +29,7 @@ pub struct Initialised {
 }
 
 pub struct MessageHandler {
-    state: HandlerState,
+    state: ClientState,
     user_connections: Arc<Mutex<UserConnections>>,
 }
 
@@ -42,7 +39,7 @@ impl MessageHandler {
         curr_writer: ConnectionWrite,
     ) -> MessageHandler {
         MessageHandler {
-            state: HandlerState::Fresh(Fresh {
+            state: ClientState::Fresh(Fresh {
                 curr_writer: Arc::new(Mutex::new(curr_writer)),
             }),
             user_connections,
@@ -65,7 +62,7 @@ impl MessageHandler {
 
     pub fn has_quit(&self) -> bool {
         let has_quit = match self.state {
-            HandlerState::Quit => true,
+            ClientState::Quit => true,
             _ => false,
         };
 
@@ -76,26 +73,24 @@ impl MessageHandler {
         let message = message.as_deref().map(ParsedMessage::try_from);
         let message = match message {
             Ok(Ok(message)) => message,
-            Err(err) => {
-                match err.downcast_ref::<ConnectionError>() {
-                    Some(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
-                        info!("Lost connection.");
+            Err(err) => match err.downcast_ref::<ConnectionError>() {
+                Some(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
+                    info!("Lost connection.");
 
-                        if let Some(nick) = self.get_nick() {
-                            let mut user_conn_guard = self.user_connections.lock().unwrap();
-                            user_conn_guard.remove_user(&nick);
-                        }
-
-                        self.state = HandlerState::Quit;
-                        return Ok(());
-                    },
-                    Some(_) | None => {
-                        error!("Invalid message received... ignoring message.");
-        
-                        return Ok(());
+                    if let Some(nick) = self.get_nick() {
+                        let mut user_conn_guard = self.user_connections.lock().unwrap();
+                        user_conn_guard.remove_user(&nick);
                     }
+
+                    self.state = ClientState::Quit;
+                    return Ok(());
                 }
-            }
+                Some(_) | None => {
+                    error!("Invalid message received... ignoring message.");
+
+                    return Ok(());
+                }
+            },
             Ok(Err(err)) => {
                 error!("{err}");
 
@@ -108,14 +103,14 @@ impl MessageHandler {
 
     fn transition_parsed(&mut self, message: Message) -> anyhow::Result<()> {
         match (&self.state, message) {
-            (HandlerState::Fresh(state), Message::Nick(nick_msg)) => {
+            (ClientState::Fresh(state), Message::Nick(nick_msg)) => {
                 let nick = nick_msg.nick.clone();
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 user_conn_guard.add_user(&nick, state.curr_writer.clone())?;
 
-                self.state = HandlerState::Nicked(Nicked { nick });
+                self.state = ClientState::Nicked(Nicked { nick });
             }
-            (HandlerState::Nicked(state), Message::User(user_msg)) => {
+            (ClientState::Nicked(state), Message::User(user_msg)) => {
                 let real_name = user_msg.real_name.clone();
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
 
@@ -128,14 +123,14 @@ impl MessageHandler {
                     }),
                 )?;
 
-                self.state = HandlerState::Initialised(Initialised { nick, real_name });
+                self.state = ClientState::Initialised(Initialised { nick, real_name });
             }
-            (HandlerState::Initialised(state), Message::Ping(ping_msg)) => {
+            (ClientState::Initialised(state), Message::Ping(ping_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
                 user_conn_guard.write_to_user(&nick, &Reply::Pong(ping_msg.clone()))?;
             }
-            (HandlerState::Initialised(state), Message::Quit(quit_msg)) => {
+            (ClientState::Initialised(state), Message::Quit(quit_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
                 user_conn_guard.write_to_users_channel(
@@ -149,9 +144,9 @@ impl MessageHandler {
                 info!("{nick} has quit...");
                 user_conn_guard.remove_user(&nick);
 
-                self.state = HandlerState::Quit;
+                self.state = ClientState::Quit;
             }
-            (HandlerState::Initialised(state), Message::PrivMsg(priv_msg)) => {
+            (ClientState::Initialised(state), Message::PrivMsg(priv_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
                 user_conn_guard.write(
@@ -162,7 +157,7 @@ impl MessageHandler {
                     }),
                 )?;
             }
-            (HandlerState::Initialised(state), Message::Join(join_msg)) => {
+            (ClientState::Initialised(state), Message::Join(join_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
                 user_conn_guard.add_user_to_channel(&nick, &join_msg.channel)?;
@@ -174,7 +169,7 @@ impl MessageHandler {
                     }),
                 )?;
             }
-            (HandlerState::Initialised(state), Message::Part(part_msg)) => {
+            (ClientState::Initialised(state), Message::Part(part_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
                 user_conn_guard.remove_user_from_channel(&nick, &part_msg.channel)?;
@@ -186,7 +181,7 @@ impl MessageHandler {
                     }),
                 )?;
             }
-            _ => { },
+            _ => {}
         };
 
         Ok(())
@@ -194,83 +189,11 @@ impl MessageHandler {
 
     fn get_nick(&self) -> Option<Nick> {
         let nick = match &self.state {
-            HandlerState::Nicked(state) => Some(state.nick.clone()),
-            HandlerState::Initialised(state) => Some(state.nick.clone()),
+            ClientState::Nicked(state) => Some(state.nick.clone()),
+            ClientState::Initialised(state) => Some(state.nick.clone()),
             _ => None,
         };
 
         nick
     }
 }
-
-/*
-
-/// Fully initialised connection
-pub struct InitialisedHandler {
-    user_connections: Arc<Mutex<UserConnections>>,
-    nick: Nick,
-    real_name: String,
-}
-
-impl MessageHandler for InitialisedHandler {
-    fn handle_parsed(self: Box<Self>, message: &Message) -> Result<Box<dyn MessageHandler>, ErrorType> {
-        match message {
-            Message::Ping(ping_msg) => {
-                let mut user_conn_guard = self.user_connections.lock().unwrap();
-                user_conn_guard.write_to_user(&self.nick, &Reply::Pong(ping_msg.clone()))?;
-                Ok(self)
-            }
-            Message::Quit(quit_msg) => {
-                let mut user_conn_guard = self.user_connections.lock().unwrap();
-                user_conn_guard.write_to_users_channel(
-                    &self.nick,
-                    &Reply::Quit(QuitReply {
-                        message: quit_msg.clone(),
-                        sender_nick: self.nick.clone(),
-                    }),
-                )?;
-
-                user_conn_guard.remove_user(&self.nick);
-                Ok(Box::new(QuitHandler))
-            }
-            Message::PrivMsg(priv_msg) => {
-                let mut user_conn_guard = self.user_connections.lock().unwrap();
-                user_conn_guard.write(
-                    &priv_msg.target,
-                    &Reply::PrivMsg(PrivReply {
-                        message: priv_msg.clone(),
-                        sender_nick: self.nick.clone(),
-                    }),
-                )?;
-
-                Ok(self)
-            }
-            _ => Ok(self),
-        }
-    }
-
-    fn handle_fatal_error(&self, err: ErrorType) -> Box<dyn MessageHandler> {
-        let mut user_conn_guard = self.user_connections.lock().unwrap();
-        error!("{err}");
-        user_conn_guard.remove_user(&self.nick);
-        Box::new(QuitHandler)
-    }
-}
-
-/// The session has quit
-pub struct QuitHandler;
-
-impl MessageHandler for QuitHandler {
-    fn handle_parsed(self: Box<Self>, message: &Message) -> Result<Box<dyn MessageHandler>, ErrorType> {
-        Ok(self)
-    }
-
-    fn handle_fatal_error(&self, err: ErrorType) -> Box<dyn MessageHandler> {
-        Box::new(QuitHandler)
-    }
-
-    fn has_quit(&self) -> bool {
-        true
-    }
-}
-*/
