@@ -1,9 +1,12 @@
+#![feature(scoped_threads)]
+
 #[macro_use]
 extern crate log;
 extern crate simplelog;
 
 mod message_handler;
 mod user_connections;
+mod plugin_handler;
 
 use anyhow::anyhow;
 use clap::Parser;
@@ -24,6 +27,9 @@ struct Arguments {
 
     #[clap(default_value = "6991")]
     port: u16,
+
+    #[clap(long)]
+    plugins: Vec<String>,
 }
 
 fn main() {
@@ -43,6 +49,7 @@ fn main() {
             // This function call will block until a new client connects!
             let (mut conn_read, conn_write) = connection_manager.accept_new_connection();
             let thread_user_connections = user_connections.clone();
+            let thread_plugin_list = arguments.plugins.clone();
             info!("New connection from {}", conn_read.id());
 
             s.spawn(move || {

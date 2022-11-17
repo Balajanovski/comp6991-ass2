@@ -1,3 +1,5 @@
+use crate::plugin::{RPluginName, RNick, RPluginMsg, RPluginReply, RTarget, RChannel};
+
 /// All relevant IRC errors are listed here.
 /// See the assignment documentation for more information.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -12,6 +14,7 @@ pub enum ErrorType {
     NeedMoreParams = 461,
     NoSuchNick = 401,
     NoSuchChannel = 403,
+    PluginException = 998,
     NoSuchPlugin = 999,
 }
 
@@ -52,6 +55,9 @@ impl std::fmt::Display for ErrorType {
             }
             ErrorType::NickCollision => {
                 write!(fmt, ":{SERVER_NAME} 436 :Nickname collision")
+            }
+            ErrorType::PluginException => {
+                write!(fmt, ":{SERVER_NAME} 998 :Plugin exception")
             }
             ErrorType::NoSuchPlugin => {
                 write!(fmt, ":{SERVER_NAME} 999 :No such plugin")
@@ -98,6 +104,15 @@ impl From<String> for Target {
     }
 }
 
+impl From<RTarget> for Target {
+    fn from(target: RTarget) -> Self {
+        match target {
+            RTarget::RChannel(channel) => Target::Channel(channel.into()),
+            RTarget::RUser(user) => Target::User(user.into()),
+        }
+    }
+}
+
 impl std::fmt::Display for Target {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
@@ -128,6 +143,12 @@ impl TryFrom<String> for Nick {
     }
 }
 
+impl From<RNick> for Nick {
+    fn from(nick: RNick) -> Self {
+        Nick(nick.0.into())
+    }
+}
+
 impl std::fmt::Display for Nick {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(fmt)
@@ -154,6 +175,12 @@ impl TryFrom<String> for Channel {
     }
 }
 
+impl From<RChannel> for Channel {
+    fn from(channel: RChannel) -> Self {
+        Channel(channel.0.into())
+    }
+}
+
 impl std::fmt::Display for Channel {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(fmt)
@@ -177,6 +204,12 @@ impl TryFrom<String> for PluginName {
         } else {
             Err(ErrorType::NoSuchPlugin)
         }
+    }
+}
+
+impl From<RPluginName> for PluginName {
+    fn from(name: RPluginName) -> Self {
+        PluginName(name.0.into())
     }
 }
 
@@ -277,6 +310,16 @@ impl TryFrom<Vec<String>> for PluginMsg {
             long_arg: value[value.len()-1].clone(),
             short_args: (&value[2..value.len()-1]).to_vec(),
         })
+    }
+}
+
+impl From<RPluginMsg> for PluginMsg {
+    fn from(msg: RPluginMsg) -> Self {
+        PluginMsg { 
+            plugin_name: msg.plugin_name.into(), 
+            short_args: msg.short_args.into_iter().map(|arg| { arg.into() }).collect(), 
+            long_arg: msg.long_arg.into() 
+        }
     }
 }
 
@@ -428,6 +471,15 @@ pub struct PluginReply {
     pub message: String,
 }
 
+impl From<RPluginReply> for PluginReply {
+    fn from(reply: RPluginReply) -> Self {
+        PluginReply { 
+            target: reply.target.into(), 
+            message: reply.message.into(), 
+        }
+    }
+}
+
 /// Every possible reply to a message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reply {
@@ -492,7 +544,6 @@ mod tests {
         assert_eq!(
             ParsedMessage::try_from(UnparsedMessage {
                 message: "PING :host-name with space\r\n",
-                sender_nick: Nick("Person".to_string())
             })
             .unwrap()
             .message,
@@ -505,7 +556,6 @@ mod tests {
         assert_eq!(
             ParsedMessage::try_from(UnparsedMessage {
                 message: "PRIVMSG tom :Hi Tom, how are you?\r\n",
-                sender_nick: Nick("Person".to_string())
             })
             .unwrap()
             .message,
@@ -521,7 +571,6 @@ mod tests {
         assert_eq!(
             ParsedMessage::try_from(UnparsedMessage {
                 message: "NICK tfpk\r\n",
-                sender_nick: Nick("Person".to_string())
             })
             .unwrap()
             .message,
@@ -532,7 +581,6 @@ mod tests {
         assert_eq!(
             ParsedMessage::try_from(UnparsedMessage {
                 message: "NICK tfpkasdfasdfasdf\r\n",
-                sender_nick: Nick("Person".to_string())
             }),
             Err(ErrorType::ErroneousNickname)
         );
