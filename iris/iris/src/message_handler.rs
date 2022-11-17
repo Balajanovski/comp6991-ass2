@@ -4,6 +4,7 @@
 
 use common::connect::{ConnectionError, ConnectionWrite};
 use common::types::*;
+use crate::plugin_handler::PluginHandler;
 use crate::user_connections::UserConnections;
 use log::{error, info};
 use std::sync::{Arc, Mutex};
@@ -31,18 +32,21 @@ pub struct Initialised {
 pub struct MessageHandler {
     state: ClientState,
     user_connections: Arc<Mutex<UserConnections>>,
+    plugin_handler: PluginHandler,
 }
 
 impl MessageHandler {
     pub fn new(
         user_connections: Arc<Mutex<UserConnections>>,
         curr_writer: ConnectionWrite,
+        plugin_paths: Vec<String>,
     ) -> MessageHandler {
         MessageHandler {
             state: ClientState::Fresh(Fresh {
                 curr_writer: Arc::new(Mutex::new(curr_writer)),
             }),
             user_connections,
+            plugin_handler: PluginHandler::new(&plugin_paths),
         }
     }
 
@@ -50,12 +54,16 @@ impl MessageHandler {
         match self.transition(message) {
             Ok(_) => {}
             Err(err) => {
+                // Handle any uncaught errors by quitting the session
+
                 error!("{err}");
 
                 if let Some(nick) = self.get_nick() {
                     let mut user_conn_guard = self.user_connections.lock().unwrap();
                     user_conn_guard.remove_user(&nick);
                 }
+
+                self.state = ClientState::Quit;
             }
         }
     }
@@ -180,6 +188,15 @@ impl MessageHandler {
                         sender_nick: nick.clone(),
                     }),
                 )?;
+            }
+            (ClientState::Initialised(state), Message::Plugin(plugin_msg)) => {
+                let nick = state.nick.clone();
+                let plugin_reply = self.plugin_handler.handle(&nick, &state.real_name, plugin_msg)?;
+
+                if let Some(plugin_reply) = plugin_reply {
+                    let mut user_conn_guard = self.user_connections.lock().unwrap();
+                    user_conn_guard.write(&plugin_reply.target.clone(), &Reply::Plugin(plugin_reply))?;
+                }
             }
             _ => {}
         };

@@ -16,7 +16,7 @@ use crate::types::{PluginReply, PluginMsg, PluginName, Nick, Channel, Target};
 pub struct PluginMod {
     pub init: extern "C" fn(),
     pub pl_name: extern "C" fn() -> RPluginName,
-    pub handler: extern "C" fn(sender: RNick, message: RPluginMsg) -> RResult<ROption<RPluginReply>, RString>,
+    pub handler: extern "C" fn(sender: RNick, real_name: RString, message: RPluginMsg) -> RResult<ROption<RPluginReply>, RString>,
 }
 
 #[repr(C)]
@@ -78,16 +78,14 @@ impl From<PluginReply> for RPluginReply {
 #[derive(StableAbi)]
 pub struct RPluginMsg {
     pub plugin_name: RPluginName,
-    pub short_args: RVec<RString>,
-    pub long_arg: RString,
+    pub args: RVec<RString>,
 }
 
 impl From<PluginMsg> for RPluginMsg {
     fn from(repl: PluginMsg) -> Self {
         RPluginMsg { 
             plugin_name: repl.plugin_name.into(), 
-            short_args: repl.short_args.into_iter().map(|v| v.into()).collect(), 
-            long_arg: repl.long_arg.into(),
+            args: repl.args.into_iter().map(|v| v.into()).collect(),
         }
     }
 }

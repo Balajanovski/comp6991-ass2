@@ -38,7 +38,7 @@ fn main() {
 
     info!(
         "Launching {} at {}:{}",
-        SERVER_NAME, arguments.ip_address, arguments.port
+        SERVER_NAME, arguments.ip_address, arguments.port,
     );
 
     let mut connection_manager = ConnectionManager::launch(arguments.ip_address, arguments.port);
@@ -53,7 +53,11 @@ fn main() {
             info!("New connection from {}", conn_read.id());
 
             s.spawn(move || {
-                let mut handler = MessageHandler::new(thread_user_connections, conn_write);
+                let mut handler = MessageHandler::new(
+                    thread_user_connections, 
+                    conn_write, 
+                    thread_plugin_list
+                );
                 while !handler.has_quit() {
                     info!("Waiting for message...");
 

@@ -213,6 +213,12 @@ impl From<RPluginName> for PluginName {
     }
 }
 
+impl std::fmt::Display for PluginName {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(fmt)
+    }
+}
+
 /// A message to set the nickname.
 /// For example: `NICK tfpk\r\n`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,8 +303,7 @@ impl TryFrom<Vec<String>> for UserMsg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginMsg {
     pub plugin_name: PluginName,
-    pub short_args: Vec<String>,
-    pub long_arg: String,
+    pub args: Vec<String>,
 }
 
 impl TryFrom<Vec<String>> for PluginMsg {
@@ -307,8 +312,7 @@ impl TryFrom<Vec<String>> for PluginMsg {
     fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
         Ok(PluginMsg {
             plugin_name: PluginName::try_from(value.get(1).ok_or(ErrorType::NoSuchPlugin)?.to_string())?,
-            long_arg: value[value.len()-1].clone(),
-            short_args: (&value[2..value.len()-1]).to_vec(),
+            args: (&value[2..value.len()]).to_vec(),
         })
     }
 }
@@ -317,8 +321,7 @@ impl From<RPluginMsg> for PluginMsg {
     fn from(msg: RPluginMsg) -> Self {
         PluginMsg { 
             plugin_name: msg.plugin_name.into(), 
-            short_args: msg.short_args.into_iter().map(|arg| { arg.into() }).collect(), 
-            long_arg: msg.long_arg.into() 
+            args: msg.args.into_iter().map(|arg| { arg.into() }).collect(), 
         }
     }
 }
