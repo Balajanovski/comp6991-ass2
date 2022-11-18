@@ -9,3 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 abi_stable = "0.10.0"
+anyhow = "1.0.66"
+bufstream = "0.1.4"
+closure = "0.3.0"
+log = "0.4.17"

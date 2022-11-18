@@ -3,11 +3,11 @@ use abi_stable::{
     library::{LibraryError, RootModule},
     package_version_strings,
     sabi_types::VersionStrings,
-    std_types::{RString, ROption, RVec, RResult},
+    std_types::{ROption, RResult, RString, RVec},
     StableAbi,
 };
 
-use crate::types::{PluginReply, PluginMsg, PluginName, Nick, Channel, Target};
+use crate::types::{Channel, Nick, PluginMsg, PluginName, PluginReply, Target};
 
 #[repr(C)]
 #[derive(StableAbi)]
@@ -16,7 +16,11 @@ use crate::types::{PluginReply, PluginMsg, PluginName, Nick, Channel, Target};
 pub struct PluginMod {
     pub init: extern "C" fn(),
     pub pl_name: extern "C" fn() -> RPluginName,
-    pub handler: extern "C" fn(sender: RNick, real_name: RString, message: RPluginMsg) -> RResult<ROption<RPluginReply>, RString>,
+    pub handler: extern "C" fn(
+        sender: RNick,
+        real_name: RString,
+        message: RPluginMsg,
+    ) -> RResult<ROption<RPluginReply>, RString>,
 }
 
 #[repr(C)]
@@ -70,7 +74,10 @@ impl From<PluginReply> for RPluginReply {
             Target::User(user) => RTarget::RUser(user.into()),
         };
 
-        RPluginReply { target, message: repl.message.into() }
+        RPluginReply {
+            target,
+            message: repl.message.into(),
+        }
     }
 }
 
@@ -83,8 +90,8 @@ pub struct RPluginMsg {
 
 impl From<PluginMsg> for RPluginMsg {
     fn from(repl: PluginMsg) -> Self {
-        RPluginMsg { 
-            plugin_name: repl.plugin_name.into(), 
+        RPluginMsg {
+            plugin_name: repl.plugin_name.into(),
             args: repl.args.into_iter().map(|v| v.into()).collect(),
         }
     }

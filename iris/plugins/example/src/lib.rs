@@ -1,10 +1,10 @@
 //! # An example plugin
-//! 
+//!
 //! ## Introduction
 //! Plugins are loaded into IRIS utilising dynamic loading.
 //! Creating the plugin interface is done using the stable_abi crate.
 //! This blog series goes into the approach well: https://nullderef.com/blog/plugin-dynload/
-//! 
+//!
 //! ## Loading
 //! When the plugin is built, it will output a dynamic library file (.so extension).
 //! To run IRIS with the plugin loaded, simply run:
@@ -14,17 +14,11 @@ use abi_stable::{
     export_root_module,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
-    std_types::{RString, ROption, RResult},
+    std_types::{ROption, RResult, RString},
 };
 
 use common::plugin::{
-    PluginMod, 
-    RPluginName, 
-    RPluginReply, 
-    RPluginMsg, 
-    RTarget,
-    RNick,
-    PluginMod_Ref,
+    PluginMod, PluginMod_Ref, RNick, RPluginMsg, RPluginName, RPluginReply, RTarget,
 };
 
 /// # Plugin Initialisation
@@ -37,7 +31,7 @@ pub fn init() {
 }
 
 /// # Plugin Name
-/// This function returns a string which IRIS will listen for to 
+/// This function returns a string which IRIS will listen for to
 /// know to run this plugin.
 /// It MUST start with a '/'.
 #[sabi_extern_fn]
@@ -49,22 +43,22 @@ pub fn pl_name() -> RPluginName {
 /// This function will be run whenever the plugin command is typed.
 /// For example: `PLUGIN /example :hi`.
 /// It will be passed in the nickname of the user who ran the command, as well as the arguments they passed.
-/// You return a Result (errors as string can be raised in case input is invalid). 
+/// You return a Result (errors as string can be raised in case input is invalid).
 /// The Result contains an Optional reply. This will be sent to the appropriate target.
 /// If you do not want your plugin to output anything, simply have this optional be None.
 #[sabi_extern_fn]
-pub fn handler(sender: RNick, real_name: RString, msg: RPluginMsg) -> RResult<ROption<RPluginReply>, RString> {
+pub fn handler(
+    sender: RNick,
+    real_name: RString,
+    msg: RPluginMsg,
+) -> RResult<ROption<RPluginReply>, RString> {
     if msg.args.len() != 1 {
         RResult::RErr(RString::from("Expected 1 argument"))
     } else {
-        RResult::ROk(
-            ROption::RSome(
-                RPluginReply {
-                    target: RTarget::RUser(sender),
-                    message: format!("Echo \"{}\" to \"{}\"", msg.args[0].clone(), real_name).into(),
-                }
-            )
-        )
+        RResult::ROk(ROption::RSome(RPluginReply {
+            target: RTarget::RUser(sender),
+            message: format!("Echo \"{}\" to \"{}\"", msg.args[0].clone(), real_name).into(),
+        }))
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::plugin::{RPluginName, RNick, RPluginMsg, RPluginReply, RTarget, RChannel};
+use crate::plugin::{RChannel, RNick, RPluginMsg, RPluginName, RPluginReply, RTarget};
 
 /// All relevant IRC errors are listed here.
 /// See the assignment documentation for more information.
@@ -311,7 +311,9 @@ impl TryFrom<Vec<String>> for PluginMsg {
 
     fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
         Ok(PluginMsg {
-            plugin_name: PluginName::try_from(value.get(1).ok_or(ErrorType::NoSuchPlugin)?.to_string())?,
+            plugin_name: PluginName::try_from(
+                value.get(1).ok_or(ErrorType::NoSuchPlugin)?.to_string(),
+            )?,
             args: (&value[2..value.len()]).to_vec(),
         })
     }
@@ -319,9 +321,9 @@ impl TryFrom<Vec<String>> for PluginMsg {
 
 impl From<RPluginMsg> for PluginMsg {
     fn from(msg: RPluginMsg) -> Self {
-        PluginMsg { 
-            plugin_name: msg.plugin_name.into(), 
-            args: msg.args.into_iter().map(|arg| { arg.into() }).collect(), 
+        PluginMsg {
+            plugin_name: msg.plugin_name.into(),
+            args: msg.args.into_iter().map(|arg| arg.into()).collect(),
         }
     }
 }
@@ -476,9 +478,9 @@ pub struct PluginReply {
 
 impl From<RPluginReply> for PluginReply {
     fn from(reply: RPluginReply) -> Self {
-        PluginReply { 
-            target: reply.target.into(), 
-            message: reply.message.into(), 
+        PluginReply {
+            target: reply.target.into(),
+            message: reply.message.into(),
         }
     }
 }
@@ -504,7 +506,7 @@ impl std::fmt::Display for Reply {
                 let target = &p.target;
                 let message = &p.message;
                 write!(fmt, "PLUGIN {target} : {message}\r\n")
-            },
+            }
             Reply::Welcome(r) => {
                 let nick = &r.target_nick;
                 let message = &r.message;
@@ -586,6 +588,27 @@ mod tests {
                 message: "NICK tfpkasdfasdfasdf\r\n",
             }),
             Err(ErrorType::ErroneousNickname)
+        );
+    }
+
+    #[test]
+    fn test_plugin() {
+        assert_eq!(
+            ParsedMessage::try_from(UnparsedMessage {
+                message: "PLUGIN /example hi :hello world\r\n",
+            })
+            .unwrap()
+            .message,
+            Message::Plugin(PluginMsg {
+                plugin_name: PluginName::try_from("/example".to_string()).unwrap(),
+                args: vec!["hi".to_string(), "hello world".to_string()],
+            })
+        );
+        assert_eq!(
+            ParsedMessage::try_from(UnparsedMessage {
+                message: "PLUGIN djwaodkwaldj\r\n",
+            }),
+            Err(ErrorType::NoSuchPlugin)
         );
     }
 }

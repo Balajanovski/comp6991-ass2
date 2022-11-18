@@ -2,10 +2,10 @@
 //! Implements state design pattern to handle transitions between handler states
 //! Very loosely based off of: https://hoverbear.org/blog/rust-state-machine-pattern/
 
-use common::connect::{ConnectionError, ConnectionWrite};
-use common::types::*;
 use crate::plugin_handler::PluginHandler;
 use crate::user_connections::UserConnections;
+use common::connect::{ConnectionError, ConnectionWrite};
+use common::types::*;
 use log::{error, info};
 use std::sync::{Arc, Mutex};
 
@@ -79,32 +79,45 @@ impl MessageHandler {
 
     fn transition(&mut self, message: anyhow::Result<String>) -> anyhow::Result<()> {
         let message = message.as_deref().map(ParsedMessage::try_from);
-        let message = match message {
-            Ok(Ok(message)) => message,
-            Err(err) => match err.downcast_ref::<ConnectionError>() {
-                Some(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
-                    info!("Lost connection.");
+        let message =
+            match message {
+                Ok(Ok(message)) => message,
+                Err(err) => match err.downcast_ref::<ConnectionError>() {
+                    Some(ConnectionError::ConnectionLost | ConnectionError::ConnectionClosed) => {
+                        info!("Lost connection.");
+
+                        if let Some(nick) = self.get_nick() {
+                            let mut user_conn_guard = self.user_connections.lock().unwrap();
+                            user_conn_guard.remove_user(&nick);
+                        }
+
+                        self.state = ClientState::Quit;
+                        return Ok(());
+                    }
+                    Some(_) | None => {
+                        error!("Invalid message received... ignoring message. (Error: {err})");
+
+                        return Ok(());
+                    }
+                },
+                Ok(Err(err)) => {
+                    error!("{err}");
 
                     if let Some(nick) = self.get_nick() {
                         let mut user_conn_guard = self.user_connections.lock().unwrap();
-                        user_conn_guard.remove_user(&nick);
+                        let _ = user_conn_guard.write_to_user(&nick, &err.to_string());
+                    } else if let ClientState::Fresh(state) = &self.state {
+                        // The user has not yet been stored in the connections manager
+                        // So, to write the error to console we need to utilise the curr writer
+
+                        state.curr_writer.lock().unwrap().write_message(
+                            format!("{}\r\n", err.to_string().trim_end()).as_str(),
+                        )?;
                     }
 
-                    self.state = ClientState::Quit;
                     return Ok(());
                 }
-                Some(_) | None => {
-                    error!("Invalid message received... ignoring message.");
-
-                    return Ok(());
-                }
-            },
-            Ok(Err(err)) => {
-                error!("{err}");
-
-                return Ok(());
-            }
-        };
+            };
 
         self.transition_parsed(message.message)
     }
@@ -113,9 +126,9 @@ impl MessageHandler {
         match (&self.state, message) {
             (ClientState::Fresh(state), Message::Nick(nick_msg)) => {
                 let nick = nick_msg.nick.clone();
+
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 user_conn_guard.add_user(&nick, state.curr_writer.clone())?;
-
                 self.state = ClientState::Nicked(Nicked { nick });
             }
             (ClientState::Nicked(state), Message::User(user_msg)) => {
@@ -128,7 +141,8 @@ impl MessageHandler {
                     &Reply::Welcome(WelcomeReply {
                         target_nick: nick.clone(),
                         message: format!("Hi {real_name}, welcome to IRC"),
-                    }),
+                    })
+                    .to_string(),
                 )?;
 
                 self.state = ClientState::Initialised(Initialised { nick, real_name });
@@ -136,7 +150,7 @@ impl MessageHandler {
             (ClientState::Initialised(state), Message::Ping(ping_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
-                user_conn_guard.write_to_user(&nick, &Reply::Pong(ping_msg.clone()))?;
+                user_conn_guard.write_to_user(&nick, &Reply::Pong(ping_msg.clone()).to_string())?;
             }
             (ClientState::Initialised(state), Message::Quit(quit_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
@@ -146,7 +160,8 @@ impl MessageHandler {
                     &Reply::Quit(QuitReply {
                         message: quit_msg.clone(),
                         sender_nick: nick.clone(),
-                    }),
+                    })
+                    .to_string(),
                 )?;
 
                 info!("{nick} has quit...");
@@ -162,7 +177,8 @@ impl MessageHandler {
                     &Reply::PrivMsg(PrivReply {
                         message: priv_msg.clone(),
                         sender_nick: nick.clone(),
-                    }),
+                    })
+                    .to_string(),
                 )?;
             }
             (ClientState::Initialised(state), Message::Join(join_msg)) => {
@@ -174,7 +190,8 @@ impl MessageHandler {
                     &Reply::Join(JoinReply {
                         message: join_msg.clone(),
                         sender_nick: nick.clone(),
-                    }),
+                    })
+                    .to_string(),
                 )?;
             }
             (ClientState::Initialised(state), Message::Part(part_msg)) => {
@@ -186,12 +203,14 @@ impl MessageHandler {
                     &Reply::Part(PartReply {
                         message: part_msg.clone(),
                         sender_nick: nick.clone(),
-                    }),
+                    })
+                    .to_string(),
                 )?;
             }
             (ClientState::Initialised(state), Message::Plugin(plugin_msg)) => {
                 let nick = state.nick.clone();
-                self.plugin_handler.handle(&nick, &state.real_name, plugin_msg);
+                self.plugin_handler
+                    .handle(&nick, &state.real_name, plugin_msg);
             }
             _ => {}
         };

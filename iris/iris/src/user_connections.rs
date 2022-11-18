@@ -1,6 +1,6 @@
-use common::connect::ConnectionWrite;
-use common::types::{Channel, ErrorType, Nick, Reply, Target};
 use anyhow::anyhow;
+use common::connect::ConnectionWrite;
+use common::types::{Channel, ErrorType, Nick, Target};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
@@ -85,20 +85,20 @@ impl UserConnections {
         Ok(())
     }
 
-    pub fn write(&mut self, target: &Target, message: &Reply) -> anyhow::Result<()> {
+    pub fn write(&mut self, target: &Target, message: &String) -> anyhow::Result<()> {
         match target {
             Target::User(nick) => self.write_to_user(nick, message),
             Target::Channel(channel) => self.write_to_channel(channel, message),
         }
     }
 
-    pub fn write_to_user(&mut self, target: &Nick, message: &Reply) -> anyhow::Result<()> {
+    pub fn write_to_user(&mut self, target: &Nick, message: &String) -> anyhow::Result<()> {
         match self.writers.get_mut(target) {
             Some(writer) => {
                 writer
                     .lock()
                     .unwrap()
-                    .write_message(message.to_string().as_str())?;
+                    .write_message(format!("{}\r\n", message.trim_end()).as_str())?;
                 Ok(())
             }
             None => Err(ErrorType::NoSuchNick),
@@ -106,7 +106,7 @@ impl UserConnections {
         .map_err(|e| anyhow!(e))
     }
 
-    pub fn write_to_channel(&mut self, target: &Channel, message: &Reply) -> anyhow::Result<()> {
+    pub fn write_to_channel(&mut self, target: &Channel, message: &String) -> anyhow::Result<()> {
         let nicks = match self.users_per_channel.get(target) {
             Some(nicks) => Ok(nicks.clone()),
             None => Err(ErrorType::NoSuchChannel),
@@ -120,7 +120,11 @@ impl UserConnections {
         Ok(())
     }
 
-    pub fn write_to_users_channel(&mut self, target: &Nick, message: &Reply) -> anyhow::Result<()> {
+    pub fn write_to_users_channel(
+        &mut self,
+        target: &Nick,
+        message: &String,
+    ) -> anyhow::Result<()> {
         if let Some(channels) = self.channels_per_user.get(&target.clone()) {
             for channel in channels.clone().iter() {
                 self.write_to_channel(&channel, message)?;

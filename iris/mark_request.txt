@@ -3,37 +3,37 @@
 (You should put an [X] in boxes with completed features.
 Lines starting with ">" are additional comments.)
 
-[ ] The server can be started with the command `cargo run 127.0.0.1 6991`.
+[X] The server can be started with the command `cargo run 127.0.0.1 6991`.
 
-[ ] When a 'NICK' message is sent, the server stores the relevant information from it.
-[ ] When a 'USER' message is sent after a 'NICK', the server replies with a RPL_WELCOME.
-[ ] The RPL_WELCOME contains the user's full name from the 'USER' message
-[ ] Non-'NICK'/'USER' messages are ignored until the user has sent both.
+[X] When a 'NICK' message is sent, the server stores the relevant information from it.
+[X] When a 'USER' message is sent after a 'NICK', the server replies with a RPL_WELCOME.
+[X] The RPL_WELCOME contains the user's full name from the 'USER' message
+[X] Non-'NICK'/'USER' messages are ignored until the user has sent both.
 
-[ ] When a user sends a 'PING' message, an appropriate 'PONG' is sent back.
+[X] When a user sends a 'PING' message, an appropriate 'PONG' is sent back.
 
-[ ] When a user sends a 'QUIT' message, their connection is dropped.
+[X] When a user sends a 'QUIT' message, their connection is dropped.
 
-[ ] When a user sends a 'PRIVMSG' message to themselves, it is sent back to them.
+[X] When a user sends a 'PRIVMSG' message to themselves, it is sent back to them.
 
-[ ] Multiple users can join the same server.
+[X] Multiple users can join the same server.
 
-[ ] Messages can be sent from one user to another.
+[X] Messages can be sent from one user to another.
 
-[ ] A user can 'JOIN' a channel.
+[X] A user can 'JOIN' a channel.
 
-[ ] A user can 'PART' a channel.
+[X] A user can 'PART' a channel.
 
-[ ] All relevant messages sent by users inside a channel are sent to every other member of that channel.
+[X] All relevant messages sent by users inside a channel are sent to every other member of that channel.
 
-[ ] My design never stores messages, and deletes users as soon as they have left the server.
+[X] My design never stores messages, and deletes users as soon as they have left the server.
 
-[ ] My design never stores messages, and deletes users as soon as they have left the server.
+[X] My design never stores messages, and deletes users as soon as they have left the server.
 
-[ ] It is possible to set reminders, using the following command (change this if you'd like)
-> PRIVMSG remindbot :10s tfpk :Remind me of something.
+[X] It is possible to set reminders, using the following command (change this if you'd like)
+> PLUGIN /remind 10 :Remind me to learn Rust
 
-[ ] I have provided an "example" plugin, which explains how somebody
+[X] I have provided an "example" plugin, which explains how somebody
     else can interface with my plugin system.
 
 ## Design Excellence
@@ -41,14 +41,26 @@ Lines starting with ">" are additional comments.)
 During the assignment we make suggestions for "design excellence". Please list all those
 things you did, and where we can find them in your program.
 
-> - TODO
+1. Rust has crates which make logging easier and more readable. Find one that you like, and use it to improve the output of your server.
+
+I used the log crate, with the simplelog backend. Usage of it is scattered throughout the project.
+Initialisation is found in iris/src/main.rs.
+
+2. Write a suite of tests for your code that increases your confidence it works as expected.
+
+I created a test IrcClient, to be used for integration tests. This test irc client can be found under common/src/irc_client.rs.
+The tests which use it are found at the bottom of iris/src/main.rs.
 
 If you made any other design choices you think demonstrate an equivalent level
 of design excellence, please list them below (including where to find them).
 Note, we suggest you check with a tutor that your design is in fact excellent
 before adding something below:
 
-> - TODO
+1. Use of anyhow for error handling throughout project.
+2. Clean and extensible state machine design pattern in iris/src/message_handler.rs, based on Rust's pattern matching.
+3. Usage of abi_stable, to make a clean interface between plugins and Iris.
+4. Extensive use of traits in common/src/plugin.rs and common/src/types.rs, to convert between the Rust structs and their ABI analogues.
+5. Datastructure iris/src/user_connections.rs creates a clean abstraction over keeping track of what users belong to what channels, whilst also allowing messages to be sent to them.
 
 ## Design Limitations
 
@@ -56,4 +68,5 @@ If you made any design decisions which you now regret making; but don't to go ba
 let us know here. You can make up your design marks by acknowledging up to 5 things you would do
 differently now.
 
-> - TODO
+1. The tests under iris/src/main.rs: When creating the test rig server I have to make use of sleep. Time dependence in tests leads to flakiness. Ideally, the test thread should just block until the fixture is ready.
+2. More tests: test coverage is quite low. We could improve testing by having designed our code to be mockable.
