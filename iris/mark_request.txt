@@ -31,7 +31,11 @@ Lines starting with ">" are additional comments.)
 [X] My design never stores messages, and deletes users as soon as they have left the server.
 
 [X] It is possible to set reminders, using the following command (change this if you'd like)
-> PLUGIN /remind 10 :Remind me to learn Rust
+
+Instructions:
+1. Startup the server with: cargo +nightly -- --plugins '/path/to/the/reminder/binary.so'
+2. Input your NICK and USER
+3. To set a reminder in 10 seconds, PLUGIN /remind 10 :Remind me to learn Rust
 
 [X] I have provided an "example" plugin, which explains how somebody
     else can interface with my plugin system.
