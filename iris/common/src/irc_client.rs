@@ -60,7 +60,7 @@ impl IrcClient {
         }
     }
 
-    pub fn send_message(&mut self, msg: &String) {
+    pub fn send_message(&mut self, msg: &str) {
         if let Err(err) = {
             self.stream_write
                 .write_all(format!("{}\r\n", msg.trim_end()).as_bytes())

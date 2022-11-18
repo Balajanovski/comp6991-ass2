@@ -69,12 +69,7 @@ impl MessageHandler {
     }
 
     pub fn has_quit(&self) -> bool {
-        let has_quit = match self.state {
-            ClientState::Quit => true,
-            _ => false,
-        };
-
-        has_quit
+        matches!(self.state, ClientState::Quit)
     }
 
     fn transition(&mut self, message: anyhow::Result<String>) -> anyhow::Result<()> {
@@ -125,14 +120,14 @@ impl MessageHandler {
     fn transition_parsed(&mut self, message: Message) -> anyhow::Result<()> {
         match (&self.state, message) {
             (ClientState::Fresh(state), Message::Nick(nick_msg)) => {
-                let nick = nick_msg.nick.clone();
+                let nick = nick_msg.nick;
 
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 user_conn_guard.add_user(&nick, state.curr_writer.clone())?;
                 self.state = ClientState::Nicked(Nicked { nick });
             }
             (ClientState::Nicked(state), Message::User(user_msg)) => {
-                let real_name = user_msg.real_name.clone();
+                let real_name = user_msg.real_name;
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
 
                 let nick = state.nick.clone();
@@ -150,7 +145,7 @@ impl MessageHandler {
             (ClientState::Initialised(state), Message::Ping(ping_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
                 let nick = state.nick.clone();
-                user_conn_guard.write_to_user(&nick, &Reply::Pong(ping_msg.clone()).to_string())?;
+                user_conn_guard.write_to_user(&nick, &Reply::Pong(ping_msg).to_string())?;
             }
             (ClientState::Initialised(state), Message::Quit(quit_msg)) => {
                 let mut user_conn_guard = self.user_connections.lock().unwrap();
@@ -158,7 +153,7 @@ impl MessageHandler {
                 user_conn_guard.write_to_users_channel(
                     &nick,
                     &Reply::Quit(QuitReply {
-                        message: quit_msg.clone(),
+                        message: quit_msg,
                         sender_nick: nick.clone(),
                     })
                     .to_string(),
@@ -176,7 +171,7 @@ impl MessageHandler {
                     &priv_msg.target,
                     &Reply::PrivMsg(PrivReply {
                         message: priv_msg.clone(),
-                        sender_nick: nick.clone(),
+                        sender_nick: nick,
                     })
                     .to_string(),
                 )?;
@@ -189,7 +184,7 @@ impl MessageHandler {
                     &join_msg.channel,
                     &Reply::Join(JoinReply {
                         message: join_msg.clone(),
-                        sender_nick: nick.clone(),
+                        sender_nick: nick,
                     })
                     .to_string(),
                 )?;
@@ -202,7 +197,7 @@ impl MessageHandler {
                     &part_msg.channel,
                     &Reply::Part(PartReply {
                         message: part_msg.clone(),
-                        sender_nick: nick.clone(),
+                        sender_nick: nick,
                     })
                     .to_string(),
                 )?;
@@ -219,12 +214,10 @@ impl MessageHandler {
     }
 
     fn get_nick(&self) -> Option<Nick> {
-        let nick = match &self.state {
+        match &self.state {
             ClientState::Nicked(state) => Some(state.nick.clone()),
             ClientState::Initialised(state) => Some(state.nick.clone()),
             _ => None,
-        };
-
-        nick
+        }
     }
 }

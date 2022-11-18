@@ -24,7 +24,7 @@ impl UserConnections {
         nick: &Nick,
         conn_write: Arc<Mutex<ConnectionWrite>>,
     ) -> anyhow::Result<()> {
-        if let Some(_) = self.writers.insert(nick.clone(), conn_write) {
+        if self.writers.insert(nick.clone(), conn_write).is_some() {
             Err(ErrorType::NickCollision)
         } else {
             Ok(())
@@ -52,11 +52,11 @@ impl UserConnections {
 
         self.users_per_channel
             .entry(channel.clone())
-            .or_insert(BTreeSet::new())
+            .or_default()
             .insert(nick.clone());
         self.channels_per_user
             .entry(nick.clone())
-            .or_insert(BTreeSet::new())
+            .or_default()
             .insert(channel.clone());
 
         Ok(())
@@ -75,24 +75,24 @@ impl UserConnections {
 
         self.users_per_channel
             .entry(channel.clone())
-            .or_insert(BTreeSet::new())
+            .or_default()
             .remove(nick);
         self.channels_per_user
             .entry(nick.clone())
-            .or_insert(BTreeSet::new())
+            .or_default()
             .remove(channel);
 
         Ok(())
     }
 
-    pub fn write(&mut self, target: &Target, message: &String) -> anyhow::Result<()> {
+    pub fn write(&mut self, target: &Target, message: &str) -> anyhow::Result<()> {
         match target {
             Target::User(nick) => self.write_to_user(nick, message),
             Target::Channel(channel) => self.write_to_channel(channel, message),
         }
     }
 
-    pub fn write_to_user(&mut self, target: &Nick, message: &String) -> anyhow::Result<()> {
+    pub fn write_to_user(&mut self, target: &Nick, message: &str) -> anyhow::Result<()> {
         match self.writers.get_mut(target) {
             Some(writer) => {
                 writer
@@ -106,7 +106,7 @@ impl UserConnections {
         .map_err(|e| anyhow!(e))
     }
 
-    pub fn write_to_channel(&mut self, target: &Channel, message: &String) -> anyhow::Result<()> {
+    pub fn write_to_channel(&mut self, target: &Channel, message: &str) -> anyhow::Result<()> {
         let nicks = match self.users_per_channel.get(target) {
             Some(nicks) => Ok(nicks.clone()),
             None => Err(ErrorType::NoSuchChannel),
@@ -120,14 +120,10 @@ impl UserConnections {
         Ok(())
     }
 
-    pub fn write_to_users_channel(
-        &mut self,
-        target: &Nick,
-        message: &String,
-    ) -> anyhow::Result<()> {
+    pub fn write_to_users_channel(&mut self, target: &Nick, message: &str) -> anyhow::Result<()> {
         if let Some(channels) = self.channels_per_user.get(&target.clone()) {
             for channel in channels.clone().iter() {
-                self.write_to_channel(&channel, message)?;
+                self.write_to_channel(channel, message)?;
             }
         }
 

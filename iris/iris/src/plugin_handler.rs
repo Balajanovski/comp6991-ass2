@@ -16,7 +16,7 @@ pub struct PluginHandler {
 
 impl PluginHandler {
     pub fn new(
-        plugin_paths: &Vec<String>,
+        plugin_paths: &[String],
         user_connections: Arc<Mutex<UserConnections>>,
     ) -> PluginHandler {
         let plugins = plugin_paths
@@ -65,11 +65,11 @@ impl PluginHandler {
         }
     }
 
-    pub fn handle(&self, nick: &Nick, real_name: &String, plugin_msg: PluginMsg) {
+    pub fn handle(&self, nick: &Nick, real_name: &str, plugin_msg: PluginMsg) {
         let pl_name = plugin_msg.plugin_name.clone();
         let plugins = self.plugins.clone();
         let nick = nick.clone();
-        let real_name = real_name.clone();
+        let real_name = real_name.to_string();
         let user_connections = self.user_connections.clone();
 
         // Run a detached thread with the plugin
@@ -86,8 +86,6 @@ impl PluginHandler {
 
                         let mut user_conn_guard = user_connections.lock().unwrap();
                         let _ = user_conn_guard.write_to_user(&nick, &error_str);
-
-                        return;
                     });
 
                 if let Ok(plugin) = plugin {
@@ -98,8 +96,6 @@ impl PluginHandler {
 
                             let mut user_conn_guard = user_connections.lock().unwrap();
                             let _ = user_conn_guard.write_to_user(&nick, &error_str);
-
-                            return;
                         });
 
                     if let Ok(plugin_reply) = plugin_reply {

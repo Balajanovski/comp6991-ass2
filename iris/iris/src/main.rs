@@ -1,5 +1,3 @@
-#![feature(scoped_threads)]
-
 #[macro_use]
 extern crate log;
 extern crate simplelog;
@@ -34,12 +32,12 @@ fn main() {
     begin_server(&arguments.ip_address, arguments.port, &arguments.plugins);
 }
 
-fn begin_server(ip_address: &IpAddr, port: u16, plugins: &Vec<String>) {
+fn begin_server(ip_address: &IpAddr, port: u16, plugins: &[String]) {
     let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
 
     info!("Launching {} at {}:{}", SERVER_NAME, ip_address, port,);
 
-    let mut connection_manager = ConnectionManager::launch(ip_address.clone(), port.clone());
+    let mut connection_manager = ConnectionManager::launch(*ip_address, port);
     let user_connections = Arc::new(Mutex::new(UserConnections::new()));
 
     thread::scope(|s| {
@@ -47,7 +45,7 @@ fn begin_server(ip_address: &IpAddr, port: u16, plugins: &Vec<String>) {
             // This function call will block until a new client connects!
             let (mut conn_read, conn_write) = connection_manager.accept_new_connection();
             let thread_user_connections = user_connections.clone();
-            let thread_plugin_list = plugins.clone();
+            let thread_plugin_list = plugins.to_vec();
             info!("New connection from {}", conn_read.id());
 
             s.spawn(move || {
@@ -82,33 +80,33 @@ mod tests {
         let mut client = initialise_test_rig();
 
         // Error handling in nicknames (and ignoring other commands)
-        client.send_message(&"PING :me".to_string());
-        client.send_message(&"NOCK".to_string());
+        client.send_message("PING :me");
+        client.send_message("NOCK");
         assert_eq!(
             ":iris-server 421 :Unknown command".to_string(),
             client.get_message().unwrap()
         );
-        client.send_message(&"NICK wiz".to_string());
+        client.send_message("NICK wiz");
 
         // Error handling in usernames (and ignoring other commands)
-        client.send_message(&"PING :me".to_string());
-        client.send_message(&"USERR ignored ignored ignored :Ronnie Reagan".to_string());
+        client.send_message("PING :me");
+        client.send_message("USERR ignored ignored ignored :Ronnie Reagan");
         assert_eq!(
             ":iris-server 421 :Unknown command".to_string(),
             client.get_message().unwrap()
         );
-        client.send_message(&"USER ignored ignored ignored :Ronnie Reagan".to_string());
+        client.send_message("USER ignored ignored ignored :Ronnie Reagan");
         assert_eq!(
             ":iris-server 001 wiz :Hi Ronnie Reagan, welcome to IRC",
             client.get_message().unwrap()
         );
 
         // Ping
-        client.send_message(&"PING :me".to_string());
+        client.send_message("PING :me");
         assert_eq!("PONG :me".to_string(), client.get_message().unwrap());
 
         // Message self
-        client.send_message(&"PRIVMSG wiz :hi".to_string());
+        client.send_message("PRIVMSG wiz :hi");
         assert_eq!(
             ":wiz PRIVMSG wiz :hi".to_string(),
             client.get_message().unwrap()
@@ -116,22 +114,22 @@ mod tests {
 
         // Channels
         // When you join a channel:
-        client.send_message(&"JOIN #channel".to_string());
+        client.send_message("JOIN #channel");
         // You should get notification of your own join
         assert_eq!(
             ":wiz JOIN #channel".to_string(),
             client.get_message().unwrap()
         );
         // You should see your own message to the channel
-        client.send_message(&"PRIVMSG #channel :hello".to_string());
+        client.send_message("PRIVMSG #channel :hello");
         assert_eq!(
             ":wiz PRIVMSG #channel :hello".to_string(),
             client.get_message().unwrap()
         );
         // After departing, you shouldn't see channel messages
-        client.send_message(&"PART #channel".to_string());
-        client.send_message(&"PRIVMSG #channel :hello".to_string());
-        client.send_message(&"PING :me".to_string());
+        client.send_message("PART #channel");
+        client.send_message("PRIVMSG #channel :hello");
+        client.send_message("PING :me");
         assert_eq!("PONG :me".to_string(), client.get_message().unwrap());
     }
 

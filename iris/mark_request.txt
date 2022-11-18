@@ -51,6 +51,8 @@ Initialisation is found in iris/src/main.rs.
 I created a test IrcClient, to be used for integration tests. This test irc client can be found under common/src/irc_client.rs.
 The tests which use it are found at the bottom of iris/src/main.rs.
 
+I also added an extra test to common/src/types.rs for the plugin message I created.
+
 If you made any other design choices you think demonstrate an equivalent level
 of design excellence, please list them below (including where to find them).
 Note, we suggest you check with a tutor that your design is in fact excellent

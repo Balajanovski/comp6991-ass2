@@ -125,7 +125,7 @@ impl ConnectionRead {
         let after_crlf = end + 2;
 
         self.buffer.copy_within(after_crlf..self.buflen, 0);
-        self.buflen = self.buflen - after_crlf;
+        self.buflen -= after_crlf;
 
         let message = String::from_utf8(bytes).map_err(|_| ConnectionError::MessageInvalidUtf8)?;
 

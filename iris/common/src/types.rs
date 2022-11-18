@@ -234,7 +234,7 @@ impl TryFrom<Vec<String>> for NickMsg {
             .into_iter()
             .nth(1)
             .ok_or(ErrorType::NoNickNameGiven)
-            .and_then(|value| Nick::try_from(value))
+            .and_then(Nick::try_from)
             .map(|nick| NickMsg { nick })
     }
 }
@@ -254,7 +254,7 @@ impl TryFrom<Vec<String>> for JoinMsg {
             .into_iter()
             .nth(1)
             .ok_or(ErrorType::NeedMoreParams)
-            .and_then(|value| Channel::try_from(value))
+            .and_then(Channel::try_from)
             .map(|channel| JoinMsg { channel })
     }
 }
@@ -274,7 +274,7 @@ impl TryFrom<Vec<String>> for PartMsg {
             .into_iter()
             .nth(1)
             .ok_or(ErrorType::NeedMoreParams)
-            .and_then(|value| Channel::try_from(value))
+            .and_then(Channel::try_from)
             .map(|channel| PartMsg { channel })
     }
 }
@@ -314,7 +314,7 @@ impl TryFrom<Vec<String>> for PluginMsg {
             plugin_name: PluginName::try_from(
                 value.get(1).ok_or(ErrorType::NoSuchPlugin)?.to_string(),
             )?,
-            args: (&value[2..value.len()]).to_vec(),
+            args: value[2..value.len()].to_vec(),
         })
     }
 }
@@ -416,8 +416,7 @@ impl<'a> TryFrom<UnparsedMessage<'a>> for ParsedMessage {
                     .into_iter()
                     .skip(1)
                     .last()
-                    .ok_or(ErrorType::NoOrigin)?
-                    .to_string(),
+                    .ok_or(ErrorType::NoOrigin)?,
             )),
             "PRIVMSG" => Ok(Message::PrivMsg(PrivMsg::try_from(command)?)),
             "USER" => Ok(Message::User(UserMsg::try_from(command)?)),
